@@ -85,6 +85,14 @@ typedef int tid_t;
  * only because they are mutually exclusive: only a thread in the
  * ready state is on the run queue, whereas only a thread in the
  * blocked state is on a semaphore wait list. */
+
+/*	Thread는 총 4kb의 메모리 공간을 가진다. 커널 스택이 위에서부터 내려오는 구조. 
+	- struct thread는 너무 커지면 안된다. 너무 커지면 kernel stack을 위한 자리가 없다.
+	- kernel stack은 너무 커지면 안된다. stack은 지역 변수 혹은 함수의 매개변수를 저장하는 공간이므로,
+	  kernel 함수들은 이들을 사용하는 것 보다는 동적 메모리 할당을 이용하는 것이 더 좋다.
+
+	0에서 magic까지의 공간이 thread의 TCB 공간이고, 4kb 공간 중 TCB를 뺀 공간을 커널 스택으로 사용한다.
+*/
 struct thread {
 	/* Owned by thread.c. */
 	tid_t tid;                          /* Thread identifier. */
@@ -92,6 +100,12 @@ struct thread {
 	char name[16];                      /* Name (for debugging purposes). */
 	int priority;                       /* Priority. */
 
+	int64_t wakeup_tick;
+
+	int init_priority;
+	struct lock *wait_on_lock;
+	struct list donations;
+	struct list_elem donation_elem;
 	/* Shared between thread.c and synch.c. */
 	struct list_elem elem;              /* List element. */
 
@@ -142,5 +156,18 @@ int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
 void do_iret (struct intr_frame *tf);
+
+void thread_sleep(int64_t ticks); // 실행 중인 thread를 sleep으로 만듦
+void thread_awake(int64_t ticks); // sleep queue에서 thread awake
+void update_next_tick_to_awake(int64_t ticks); // 최소 틱을 가진 thread 저장
+int64_t get_next_tick_to_awake(void);
+
+void test_max_priority(void);	// 현재 수행중인 thread와 가장 높은 우선순위의 thread 비교 후 scheduling
+bool cmp_priority(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
+
+void donate_priority(void);
+void remove_with_lock(struct lock *lock);
+void refresh_priority(void);
+bool thread_compare_donate_priority(const struct list_elem *l, const struct list_elem *s, void *aux UNUSED);
 
 #endif /* threads/thread.h */
