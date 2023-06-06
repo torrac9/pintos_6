@@ -1,0 +1,25 @@
+FAIL
+Test output failed to match any acceptable form.
+
+Acceptable output:
+  (open-bad-ptr) begin
+  open-bad-ptr: exit(-1)
+Differences in `diff -u' format:
+- (open-bad-ptr) begin
+- open-bad-ptr: exit(-1)
++ 000000004747ffd0                          00 00 00 00 00 00 00 00 |        ........|
++ 000000004747ffe0  f3 ff 47 47 00 00 00 00-00 00 00 00 00 00 00 00 |..GG............|
++ 000000004747fff0  00 00 00 6f 70 65 6e 2d-62 61 64 2d 70 74 72 00 |...open-bad-ptr.|
++ system call!
+Acceptable output:
+  (open-bad-ptr) begin
+  (open-bad-ptr) end
+  open-bad-ptr: exit(0)
+Differences in `diff -u' format:
+- (open-bad-ptr) begin
+- (open-bad-ptr) end
+- open-bad-ptr: exit(0)
++ 000000004747ffd0                          00 00 00 00 00 00 00 00 |        ........|
++ 000000004747ffe0  f3 ff 47 47 00 00 00 00-00 00 00 00 00 00 00 00 |..GG............|
++ 000000004747fff0  00 00 00 6f 70 65 6e 2d-62 61 64 2d 70 74 72 00 |...open-bad-ptr.|
++ system call!

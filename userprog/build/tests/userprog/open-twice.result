@@ -1,0 +1,19 @@
+FAIL
+Test output failed to match any acceptable form.
+
+Acceptable output:
+  (open-twice) begin
+  (open-twice) open "sample.txt" once
+  (open-twice) open "sample.txt" again
+  (open-twice) end
+  open-twice: exit(0)
+Differences in `diff -u' format:
+- (open-twice) begin
+- (open-twice) open "sample.txt" once
+- (open-twice) open "sample.txt" again
+- (open-twice) end
+- open-twice: exit(0)
++ 000000004747ffd0                          00 00 00 00 00 00 00 00 |        ........|
++ 000000004747ffe0  f5 ff 47 47 00 00 00 00-00 00 00 00 00 00 00 00 |..GG............|
++ 000000004747fff0  00 00 00 00 00 6f 70 65-6e 2d 74 77 69 63 65 00 |.....open-twice.|
++ system call!

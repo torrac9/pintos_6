@@ -1,0 +1,37 @@
+FAIL
+Test output failed to match any acceptable form.
+
+Acceptable output:
+  (close-twice) begin
+  (close-twice) open "sample.txt"
+  (close-twice) close "sample.txt"
+  (close-twice) close "sample.txt" again
+  close-twice: exit(-1)
+Differences in `diff -u' format:
+- (close-twice) begin
+- (close-twice) open "sample.txt"
+- (close-twice) close "sample.txt"
+- (close-twice) close "sample.txt" again
+- close-twice: exit(-1)
++ 000000004747ffd0                          00 00 00 00 00 00 00 00 |        ........|
++ 000000004747ffe0  f4 ff 47 47 00 00 00 00-00 00 00 00 00 00 00 00 |..GG............|
++ 000000004747fff0  00 00 00 00 63 6c 6f 73-65 2d 74 77 69 63 65 00 |....close-twice.|
++ system call!
+Acceptable output:
+  (close-twice) begin
+  (close-twice) open "sample.txt"
+  (close-twice) close "sample.txt"
+  (close-twice) close "sample.txt" again
+  (close-twice) end
+  close-twice: exit(0)
+Differences in `diff -u' format:
+- (close-twice) begin
+- (close-twice) open "sample.txt"
+- (close-twice) close "sample.txt"
+- (close-twice) close "sample.txt" again
+- (close-twice) end
+- close-twice: exit(0)
++ 000000004747ffd0                          00 00 00 00 00 00 00 00 |        ........|
++ 000000004747ffe0  f4 ff 47 47 00 00 00 00-00 00 00 00 00 00 00 00 |..GG............|
++ 000000004747fff0  00 00 00 00 63 6c 6f 73-65 2d 74 77 69 63 65 00 |....close-twice.|
++ system call!

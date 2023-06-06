@@ -1,0 +1,39 @@
+FAIL
+Test output failed to match any acceptable form.
+
+Acceptable output:
+  (fork-multiple) begin
+  (fork-multiple) child run
+  child: exit(4)
+  (fork-multiple) Parent: child exit status is 4
+  (fork-multiple) child run
+  child: exit(5)
+  (fork-multiple) Parent: child exit status is 5
+  (fork-multiple) child run
+  child: exit(6)
+  (fork-multiple) Parent: child exit status is 6
+  (fork-multiple) child run
+  child: exit(7)
+  (fork-multiple) Parent: child exit status is 7
+  (fork-multiple) end
+  fork-multiple: exit(0)
+Differences in `diff -u' format:
+- (fork-multiple) begin
+- (fork-multiple) child run
+- child: exit(4)
+- (fork-multiple) Parent: child exit status is 4
+- (fork-multiple) child run
+- child: exit(5)
+- (fork-multiple) Parent: child exit status is 5
+- (fork-multiple) child run
+- child: exit(6)
+- (fork-multiple) Parent: child exit status is 6
+- (fork-multiple) child run
+- child: exit(7)
+- (fork-multiple) Parent: child exit status is 7
+- (fork-multiple) end
+- fork-multiple: exit(0)
++ 000000004747ffd0                          00 00 00 00 00 00 00 00 |        ........|
++ 000000004747ffe0  f2 ff 47 47 00 00 00 00-00 00 00 00 00 00 00 00 |..GG............|
++ 000000004747fff0  00 00 66 6f 72 6b 2d 6d-75 6c 74 69 70 6c 65 00 |..fork-multiple.|
++ system call!

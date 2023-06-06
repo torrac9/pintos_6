@@ -40,24 +40,35 @@ process_init (void) {
  * Notice that THIS SHOULD BE CALLED ONCE. */
 tid_t
 process_create_initd (const char *file_name) {
+// 해당 file_name을 이름으로 갖는 thread를 만들고 initd()실행. 이 때 인자는 우리가 받아온 인자들을 넣어준다.
 	char *fn_copy;
 	tid_t tid;
 
 	/* Make a copy of FILE_NAME.
 	 * Otherwise there's a race between the caller and load(). */
-	fn_copy = palloc_get_page (0);
+	fn_copy = palloc_get_page (0);	// 하나의 가용 페이지를 할당하고 그 커널 가상주소를 리턴
 	if (fn_copy == NULL)
 		return TID_ERROR;
 	strlcpy (fn_copy, file_name, PGSIZE);
+	// fn_copy 주소 공간에 file_name을 복사해 넣어주고, 4kb로 길이를 한정한다.
+
+	/* thread_create 시 thread 이름을 실행 파일과 동일하게 만들어 주기 위해 parsing 진행 */
+	char *save_ptr;
+	strtok_r(file_name, " ", &save_ptr);
+	// file_name: "args-single", save_ptr: "onearg"
 
 	/* Create a new thread to execute FILE_NAME. */
 	tid = thread_create (file_name, PRI_DEFAULT, initd, fn_copy);
+	// 이름은 file_name(parsing됨),
+	// 우선순위 값은 PRI_DEFAULT인 thread를 생성하고 그 tid 반환
+	// 해당 thread가 실행되면 fn_copy를 인자로 받는 initd() 함수를 실행
 	if (tid == TID_ERROR)
 		palloc_free_page (fn_copy);
 	return tid;
 }
 
 /* A thread function that launches first user process. */
+// 해당 process를 초기화하고 process_exec()실행
 static void
 initd (void *f_name) {
 #ifdef VM
@@ -158,8 +169,46 @@ error:
 	thread_exit ();
 }
 
+void argument_stack(char **argv, int argc, struct intr_frame *_if){
+	// little endian
+	char *arg_address[128];
+
+	// 1. Save argument strings
+	// 맨 처음 if_->rsp = 0x47480000(USER_STACK)
+	for(int i = argc - 1; i >= 0; i--){	// 가장 idx가 큰 argv부터 쌓는다
+		int argv_len = strlen(argv[i]);	// argv[1] = "onearg", argv_len = 6
+		_if->rsp -= (argv_len + 1);
+		memcpy(_if->rsp, argv[i], argv_len + 1);
+		arg_address[i] = _if->rsp;
+		// _if->rsp = 0x4747ffed(1195900909)
+		// argu_address = {0x4747ffed, 0x4747fff9}
+
+		// 2. Word-align padding
+		while(_if->rsp % 8 != 0){
+			_if->rsp--;
+			*(uint8_t *)(_if->rsp) = 0;
+		}
+		// _if->rsp = 0x4747ff38(1195900904)
+
+		// 3. Pointers to the argument strings
+		size_t PTR_SIZE = sizeof(char *);	// PTR_SIZE = 8
+		for(int i = argc; i >= 0; i--){
+			_if->rsp = _if->rsp - PTR_SIZE;
+			if(i == argc)
+				memset(_if->rsp, 0, PTR_SIZE);
+			else
+				memcpy(_if->rsp, &arg_address[i], PTR_SIZE);
+		}
+
+		// 4. Return address
+		_if->rsp -= PTR_SIZE;
+		memset(_if->rsp, 0, PTR_SIZE);
+	}
+}
+
 /* Switch the current execution context to the f_name.
  * Returns -1 on fail. */
+// 현재 실행되고 있는 사용자 프로세스를 새 실행 파일의 프로세스로 스위칭
 int
 process_exec (void *f_name) {
 	char *file_name = f_name;
@@ -174,17 +223,51 @@ process_exec (void *f_name) {
 	_if.eflags = FLAG_IF | FLAG_MBS;
 
 	/* We first kill the current context */
-	process_cleanup ();
+	process_cleanup ();	// 현재 프로세스가 사용하고 있던 pm14를 모두 반환
+
+	/* argument를 parsing */
+	char *argv[64];	// 인자들 넣을 준비
+	int argc = 0;
+
+	char *token, *save_ptr;
+	for (token = strtok_r(file_name, " ", &save_ptr); token != NULL; token = strtok_r(NULL, " ", &save_ptr)){
+		argv[argc] = token;
+		argc++;
+	}
+	// argv = {"args-single", "onearg", NULL}이 된다.
 
 	/* And then load the binary */
-	success = load (file_name, &_if);
+	success = load (file_name, &_if);	// 새로운 프로세스를 메모리에 적재
 
 	/* If load failed, quit. */
-	palloc_free_page (file_name);
-	if (!success)
+	if (!success){
+		palloc_free_page (file_name);
 		return -1;
+	}
+
+	/* command line에서 받은 인자들을 스택에 차곡차곡 쌓는다. */
+	argument_stack(argv, argc, &_if);
+	_if.R.rdi = argc;
+	_if.R.rsi = _if.rsp + 8;
+	// 두 번째 인자 argv rsi에
+	// 그냥 argv를 넣으면 여기 커널 스택에서의 char *argv[128]의 주소가 나온다.
+	// 따라서 유저 스택에 쌓은 argv의 주소를 가져와야 하므로 _if.rsp+8이다.
+
+	hex_dump(_if.rsp, _if.rsp, USER_STACK - _if.rsp, true);
+
+	// 작업이 끝났으므로 동적할당 메모리 free
+	palloc_free_page(file_name);
 
 	/* Start switched process. */
+	// 지금까지 바꿔준 interrupt frame의 값으로 resgister 값을 바꿔준다.
+	// 즉 새 process로 switching
+	/* load()안의 if_->rip = ehdr.e_entry; 에 의해 다음 CPU의 인스트럭션을 
+	가리키는 rip 레지스터가 실행 파일에서 읽어온 해당 프로그램의 
+	entry(ELF 파일의 헤더에 저장되어 있던)를 가리킨다.
+
+	그 후 사용자 프로그램을 실행하기 위해 받았던 인자들을 인터럽트 프레임 안의 
+	스택에 차곡차곡 쌓아준 후에, do_iret() 함수를 실행해 인터럽트 프레임 안의
+	값을 실제 레지스터에 올려준다. */
 	do_iret (&_if);
 	NOT_REACHED ();
 }
@@ -204,6 +287,10 @@ process_wait (tid_t child_tid UNUSED) {
 	/* XXX: Hint) The pintos exit if process_wait (initd), we recommend you
 	 * XXX:       to add infinite loop here before
 	 * XXX:       implementing the process_wait. */
+
+	for(int i = 0; i < 100000000; i++){
+
+	}
 	return -1;
 }
 
@@ -230,15 +317,15 @@ process_cleanup (void) {
 
 	uint64_t *pml4;
 	/* Destroy the current process's page directory and switch back
-	 * to the kernel-only page directory. */
+	 * to thee krnel-only page directory. */
 	pml4 = curr->pml4;
 	if (pml4 != NULL) {
 		/* Correct ordering here is crucial.  We must set
-		 * cur->pagedir to NULL before switching page directories,
+		 * cur->pagedir to NULL before switching page directories,i
 		 * so that a timer interrupt can't switch back to the
 		 * process page directory.  We must activate the base page
 		 * directory before destroying the process's page
-		 * directory, or our active page directory will be one
+		 * directory, or our active page directory wll be one
 		 * that's been freed (and cleared). */
 		curr->pml4 = NULL;
 		pml4_activate (NULL);
@@ -248,6 +335,14 @@ process_cleanup (void) {
 
 /* Sets up the CPU for running user code in the nest thread.
  * This function is called on every context switch. */
+/* 해당 프로세서의 rsp0, 즉 커널 가상 메모리 주소의 시작점을 세팅해줌으로써
+후에 유저 프로세스에서 커널 모드로 전환할 때 커널 스택 메모리 어디에서 데이터를
+쌓아 나가면 될지를 알려준다.
+
+여기서는 기존 실행되고 있던 커널 프로세스(Caller와 일대일 매칭되고 있던)의 스택
+주소를 새 실행 프로세스의 Ring0 영역의 스택 포인터로 설정해준다. 따라서 새 실행
+프로세스는 원래 기존의 사용자 프로세스와 매칭되었던 커널을 똑같이 쓴다.
+다시 말해, 그냥 기존 Caller를 Calle로 바꿔치기 한 것.*/
 void
 process_activate (struct thread *next) {
 	/* Activate thread's page tables. */
@@ -320,6 +415,22 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
  * Stores the executable's entry point into *RIP
  * and its initial stack pointer into *RSP.
  * Returns true if successful, false otherwise. */
+/* process_activate()에서 TSS를 원래 Caller의 kernel stack 맨 위로 놓는다.
+즉, calle도 caller와 같은 kernel stack을 쓴다. user proccess만 바꿔치기 된 것이라 할 수 있다.
+
+ELF 파일 포맷에 따라 메모리에 실행 파일을 탑재한다.
+
+파일을 open하고 ELF 파일 헤더 정보를 저장한다. 이 때, 해당 실행 파일의 형식이
+제대로 되어 있는지도 확인한다.
+
+프로그램 배치 정보를 읽어 파일의 데이터를 메모리에 탑재한다.
+
+stack, data, code를 User Pool에 생성하고 초기화한다. 또한 CPU의 다음 명령어의 
+주소를 해당 프로그램의 엔터리 주소, 다시 말해 _start() 함수로 설정해준다.
+
+프로세스가 돌아가기 위해선 입력받은 인자를 유저 스택에 제대로 쌓아야 이를 나중에
+do_iret()에서 레지스터에 차례대로 넣어주어 프로그램을 실행할 수 있으므로 이를
+똑바로 쌓는 작업을 해 주어야 한다. */
 static bool
 load (const char *file_name, struct intr_frame *if_) {
 	struct thread *t = thread_current ();
@@ -329,20 +440,36 @@ load (const char *file_name, struct intr_frame *if_) {
 	bool success = false;
 	int i;
 
+	// /* file_name 자체를 pasing하지 않고, 복사본 생성 */
+	// char *file_name_copy[48];
+	// memcpy(file_name_copy, file_name, strlen(file_name)+1);	// strlen은 \0을 빼고 세준다.
+	
+	// /* strtok_r() 사용 준비 */
+	// char *token, *save_ptr;
+	// char *argv[64];
+
+	// int argc = 0;
+	// for (token = strtok_r(file_name_copy, " ", &save_ptr); token != NULL;
+	// 	token = strtok_r(NULL, " ", &save_ptr)){
+	// 		argv[argc] = token;
+	// 		argc++;
+	// }	// argv = {"args-single", "onearg", NULL}
+
 	/* Allocate and activate page directory. */
-	t->pml4 = pml4_create ();
+	t->pml4 = pml4_create ();	// 페이지 디렉토리 생성
 	if (t->pml4 == NULL)
 		goto done;
-	process_activate (thread_current ());
+	process_activate (thread_current ());	// 페이지 테이블 활성화
 
 	/* Open executable file. */
-	file = filesys_open (file_name);
+	file = filesys_open (file_name);	// 프로그램 파일 open
 	if (file == NULL) {
 		printf ("load: %s: open failed\n", file_name);
 		goto done;
 	}
 
 	/* Read and verify executable header. */
+	// ELF파일의 헤더 정보를 읽어와 저장
 	if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
 			|| memcmp (ehdr.e_ident, "\177ELF\2\1\1", 7)
 			|| ehdr.e_type != 2

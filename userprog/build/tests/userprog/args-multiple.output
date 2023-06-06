@@ -1,0 +1,46 @@
+Kernel command line: -q -f put args-multiple run 'args-multiple some arguments for you!'
+0 ~ 9fc00 1
+100000 ~ 13e0000 1
+Pintos booting with: 
+	base_mem: 0x0 ~ 0x9fc00 (Usable: 639 kB)
+	ext_mem: 0x100000 ~ 0x13e0000 (Usable: 19,328 kB)
+Calibrating timer...  58,880,000 loops/s.
+hd0:0: detected 313 sector (156 kB) disk, model "QEMU HARDDISK", serial "QM00001"
+hd0:1: detected 20,160 sector (9 MB) disk, model "QEMU HARDDISK", serial "QM00002"
+hd1:0: detected 102 sector (51 kB) disk, model "QEMU HARDDISK", serial "QM00003"
+Formatting file system...done.
+Boot complete.
+Putting 'args-multiple' into the file system...
+Executing 'args-multiple some arguments for you!':
+000000004747feb0  00 00 00 00 00 00 00 00-ea fe 47 47 00 00 00 00 |..........GG....|
+000000004747fec0  33 ff 47 47 00 00 00 00-76 ff 47 47 00 00 00 00 |3.GG....v.GG....|
+000000004747fed0  bc ff 47 47 00 00 00 00-fb ff 47 47 00 00 00 00 |..GG......GG....|
+000000004747fee0  00 00 00 00 00 00 00 00-00 00 61 72 67 73 2d 6d |..........args-m|
+000000004747fef0  75 6c 74 69 70 6c 65 00-00 00 00 00 00 00 00 00 |ultiple.........|
+000000004747ff00  02 00 00 00 00 00 00 00-33 ff 47 47 00 00 00 00 |........3.GG....|
+000000004747ff10  76 ff 47 47 00 00 00 00-bc ff 47 47 00 00 00 00 |v.GG......GG....|
+000000004747ff20  fb ff 47 47 00 00 00 00-00 00 00 00 00 00 00 00 |..GG............|
+000000004747ff30  00 00 00 73 6f 6d 65 00-00 00 00 00 00 00 00 00 |...some.........|
+000000004747ff40  02 00 00 00 00 00 00 00-b0 f8 23 04 80 00 00 00 |..........#.....|
+000000004747ff50  76 ff 47 47 00 00 00 00-bc ff 47 47 00 00 00 00 |v.GG......GG....|
+000000004747ff60  fb ff 47 47 00 00 00 00-00 00 00 00 00 00 00 00 |..GG............|
+000000004747ff70  00 00 00 00 00 00 61 72-67 75 6d 65 6e 74 73 00 |......arguments.|
+000000004747ff80  00 00 00 00 00 00 00 00-02 00 00 00 00 00 00 00 |................|
+000000004747ff90  b0 f8 23 04 80 00 00 00-44 02 00 00 00 00 00 00 |..#.....D.......|
+000000004747ffa0  bc ff 47 47 00 00 00 00-fb ff 47 47 00 00 00 00 |..GG......GG....|
+000000004747ffb0  00 00 00 00 00 00 00 00-00 00 00 00 66 6f 72 00 |............for.|
+000000004747ffc0  00 00 00 00 00 00 00 00-02 00 00 00 00 00 00 00 |................|
+000000004747ffd0  b0 f8 23 04 80 00 00 00-44 02 00 00 00 00 00 00 |..#.....D.......|
+000000004747ffe0  d0 f8 23 04 80 00 00 00-fb ff 47 47 00 00 00 00 |..#.......GG....|
+000000004747fff0  00 00 00 00 00 00 00 00-00 00 00 79 6f 75 21 00 |...........you!.|
+system call!
+Execution of 'args-multiple' complete.
+Timer: 154 ticks
+Thread: 30 idle ticks, 96 kernel ticks, 29 user ticks
+hd0:0: 0 reads, 0 writes
+hd0:1: 80 reads, 232 writes
+hd1:0: 102 reads, 0 writes
+Console: 2656 characters output
+Keyboard: 0 keys pressed
+Exception: 0 page faults
+Powering off...

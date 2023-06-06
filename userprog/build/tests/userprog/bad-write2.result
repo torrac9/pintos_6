@@ -1,0 +1,15 @@
+FAIL
+Test output failed to match any acceptable form.
+
+Acceptable output:
+  (bad-write2) begin
+  bad-write2: exit(-1)
+Differences in `diff -u' format:
+- (bad-write2) begin
+- bad-write2: exit(-1)
++ 000000004747ffd0                          00 00 00 00 00 00 00 00 |        ........|
++ 000000004747ffe0  f5 ff 47 47 00 00 00 00-00 00 00 00 00 00 00 00 |..GG............|
++ 000000004747fff0  00 00 00 00 00 62 61 64-2d 77 72 69 74 65 32 00 |.....bad-write2.|
++ system call!
+
+(User fault messages are excluded for matching purposes.)

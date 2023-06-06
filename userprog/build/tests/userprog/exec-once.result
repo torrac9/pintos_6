@@ -1,0 +1,17 @@
+FAIL
+Test output failed to match any acceptable form.
+
+Acceptable output:
+  (exec-once) begin
+  (exec-once) I'm your father
+  (child-simple) run
+  exec-once: exit(81)
+Differences in `diff -u' format:
+- (exec-once) begin
+- (exec-once) I'm your father
+- (child-simple) run
+- exec-once: exit(81)
++ 000000004747ffd0                          00 00 00 00 00 00 00 00 |        ........|
++ 000000004747ffe0  f6 ff 47 47 00 00 00 00-00 00 00 00 00 00 00 00 |..GG............|
++ 000000004747fff0  00 00 00 00 00 00 65 78-65 63 2d 6f 6e 63 65 00 |......exec-once.|
++ system call!

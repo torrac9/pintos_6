@@ -1,0 +1,17 @@
+FAIL
+Test output failed to match any acceptable form.
+
+Acceptable output:
+  (write-zero) begin
+  (write-zero) open "sample.txt"
+  (write-zero) end
+  write-zero: exit(0)
+Differences in `diff -u' format:
+- (write-zero) begin
+- (write-zero) open "sample.txt"
+- (write-zero) end
+- write-zero: exit(0)
++ 000000004747ffd0                          00 00 00 00 00 00 00 00 |        ........|
++ 000000004747ffe0  f5 ff 47 47 00 00 00 00-00 00 00 00 00 00 00 00 |..GG............|
++ 000000004747fff0  00 00 00 00 00 77 72 69-74 65 2d 7a 65 72 6f 00 |.....write-zero.|
++ system call!

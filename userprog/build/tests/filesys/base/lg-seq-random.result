@@ -1,0 +1,29 @@
+FAIL
+Test output failed to match any acceptable form.
+
+Acceptable output:
+  (lg-seq-random) begin
+  (lg-seq-random) create "nibble"
+  (lg-seq-random) open "nibble"
+  (lg-seq-random) writing "nibble"
+  (lg-seq-random) close "nibble"
+  (lg-seq-random) open "nibble" for verification
+  (lg-seq-random) verified contents of "nibble"
+  (lg-seq-random) close "nibble"
+  (lg-seq-random) end
+Differences in `diff -u' format:
+- (lg-seq-random) begin
+- (lg-seq-random) create "nibble"
+- (lg-seq-random) open "nibble"
+- (lg-seq-random) writing "nibble"
+- (lg-seq-random) close "nibble"
+- (lg-seq-random) open "nibble" for verification
+- (lg-seq-random) verified contents of "nibble"
+- (lg-seq-random) close "nibble"
+- (lg-seq-random) end
++ 000000004747ffd0                          00 00 00 00 00 00 00 00 |        ........|
++ 000000004747ffe0  f2 ff 47 47 00 00 00 00-00 00 00 00 00 00 00 00 |..GG............|
++ 000000004747fff0  00 00 6c 67 2d 73 65 71-2d 72 61 6e 64 6f 6d 00 |..lg-seq-random.|
++ system call!
+
+(Process exit codes are excluded for matching purposes.)

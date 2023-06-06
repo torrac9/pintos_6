@@ -419,7 +419,7 @@ kernel_thread (thread_func *function, void *aux) {
 }
 
 
-/* Does basic initialization of T as a blocked thread named
+/* Does basic initialization of T as a blocked thread ned
    NAME. */
 static void
 init_thread (struct thread *t, const char *name, int priority) {
@@ -456,7 +456,7 @@ next_thread_to_run (void) {
 void
 do_iret (struct intr_frame *tf) {
 	__asm __volatile(
-			"movq %0, %%rsp\n"
+			"movq %0, %%rsp\n"	// 스택 포인터가 0, 즉 tf의 맨 처음 (tr.R)을 가리킨다.
 			"movq 0(%%rsp),%%r15\n"
 			"movq 8(%%rsp),%%r14\n"
 			"movq 16(%%rsp),%%r13\n"
@@ -478,6 +478,8 @@ do_iret (struct intr_frame *tf) {
 			"addq $32, %%rsp\n"
 			"iretq"
 			: : "g" ((uint64_t) tf) : "memory");
+
+			// 그 후 entry.c의 start()가 실행되며 사용자 프로그램 활성화
 }
 
 /* Switching the thread by activating the new thread's page
@@ -667,11 +669,14 @@ void test_max_priority(void){
 	if(list_empty(&ready_list))
 		return;
 	
-	struct thread *max_priority = list_entry(list_front(&ready_list), struct thread, elem);
+	//struct thread *max_priority = list_entry(list_front(&ready_list), struct thread, elem);
 
-	if(max_priority->priority > thread_current()->priority){
+	if(!intr_context() && cmp_priority(list_front(&ready_list), &thread_current()->elem, NULL)){
 		thread_yield();
 	}
+	// if(max_priority->priority > thread_current()->priority){
+	// 	thread_yield();
+	// }
 }
 
 bool cmp_priority(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED){

@@ -1,0 +1,35 @@
+FAIL
+Test output failed to match any acceptable form.
+
+Acceptable output:
+  (exec-read) begin
+  (exec-read) open "sample.txt"
+  (exec-read) read "sample.txt" first 20 bytes
+  (child-read) begin
+  (child-read) open "sample.txt"
+  (child-read) read "sample.txt" first 20 bytes
+  (child-read) read "sample.txt" remainders
+  (child-read) Child success
+  (child-read) end
+  child-read: exit(0)
+  (exec-read) Parent success
+  (exec-read) end
+  exec-read: exit(0)
+Differences in `diff -u' format:
+- (exec-read) begin
+- (exec-read) open "sample.txt"
+- (exec-read) read "sample.txt" first 20 bytes
+- (child-read) begin
+- (child-read) open "sample.txt"
+- (child-read) read "sample.txt" first 20 bytes
+- (child-read) read "sample.txt" remainders
+- (child-read) Child success
+- (child-read) end
+- child-read: exit(0)
+- (exec-read) Parent success
+- (exec-read) end
+- exec-read: exit(0)
++ 000000004747ffd0                          00 00 00 00 00 00 00 00 |        ........|
++ 000000004747ffe0  f6 ff 47 47 00 00 00 00-00 00 00 00 00 00 00 00 |..GG............|
++ 000000004747fff0  00 00 00 00 00 00 65 78-65 63 2d 72 65 61 64 00 |......exec-read.|
++ system call!

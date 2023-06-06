@@ -1,0 +1,23 @@
+FAIL
+Test output failed to match any acceptable form.
+
+Acceptable output:
+  (wait-twice) begin
+  (child-simple) run
+  child-simple: exit(81)
+  (wait-twice) wait(exec()) = 81
+  (wait-twice) wait(exec()) = -1
+  (wait-twice) end
+  wait-twice: exit(0)
+Differences in `diff -u' format:
+- (wait-twice) begin
+- (child-simple) run
+- child-simple: exit(81)
+- (wait-twice) wait(exec()) = 81
+- (wait-twice) wait(exec()) = -1
+- (wait-twice) end
+- wait-twice: exit(0)
++ 000000004747ffd0                          00 00 00 00 00 00 00 00 |        ........|
++ 000000004747ffe0  f5 ff 47 47 00 00 00 00-00 00 00 00 00 00 00 00 |..GG............|
++ 000000004747fff0  00 00 00 00 00 77 61 69-74 2d 74 77 69 63 65 00 |.....wait-twice.|
++ system call!

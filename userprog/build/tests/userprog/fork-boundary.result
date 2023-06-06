@@ -1,0 +1,23 @@
+FAIL
+Test output failed to match any acceptable form.
+
+Acceptable output:
+  (fork-boundary) begin
+  (fork-boundary) child run
+  child-simple: exit(54)
+  (fork-boundary) fork
+  (fork-boundary) wait
+  (fork-boundary) end
+  fork-boundary: exit(0)
+Differences in `diff -u' format:
+- (fork-boundary) begin
+- (fork-boundary) child run
+- child-simple: exit(54)
+- (fork-boundary) fork
+- (fork-boundary) wait
+- (fork-boundary) end
+- fork-boundary: exit(0)
++ 000000004747ffd0                          00 00 00 00 00 00 00 00 |        ........|
++ 000000004747ffe0  f2 ff 47 47 00 00 00 00-00 00 00 00 00 00 00 00 |..GG............|
++ 000000004747fff0  00 00 66 6f 72 6b 2d 62-6f 75 6e 64 61 72 79 00 |..fork-boundary.|
++ system call!

@@ -229,16 +229,16 @@ strtok_r (char *s, const char *delimiters, char **save_ptr) {
 	ASSERT (s != NULL);
 
 	/* Skip any DELIMITERS at our current position. */
-	while (strchr (delimiters, *s) != NULL) {
+	while (strchr (delimiters, *s) != NULL) {	// s 안에서 delimiter를 찾아 위치 반환
 		/* strchr() will always return nonnull if we're searching
 		   for a null byte, because every string contains a null
 		   byte (at the end). */
-		if (*s == '\0') {
-			*save_ptr = s;
+		if (*s == '\0') {	// NULL이라면
+			*save_ptr = s;	// NULL의 자리를 save_ptr에 저장
 			return NULL;
 		}
 
-		s++;
+		s++;	// 해당 글자가 delimiter가 아니면 다음 글자로 넘어감
 	}
 
 	/* Skip any non-DELIMITERS up to the end of the string. */

@@ -74,8 +74,12 @@ main (void) {
 	bss_init ();
 
 	/* Break command line into arguments and parse options. */
-	argv = read_command_line ();
+	argv = read_command_line ();	// command line을 읽어와 argv에 저장
+	// argv = ["pinots", "-q", "run", "'echo x'", NULL]
 	argv = parse_options (argv);
+	// argv를 parsing하고 추가적인 option들을 세팅
+	// "run"등의 action부터 argv에 다시 넣음
+	// argv = ["run", "'echo x'", NULL]
 
 	/* Initialize ourselves as a thread so we can use locks,
 	   then enable console locking. */
@@ -119,7 +123,7 @@ main (void) {
 	printf ("Boot complete.\n");
 
 	/* Run actions specified on kernel command line. */
-	run_actions (argv);
+	run_actions (argv);	// argv를 기준으로 run_actions() 실행
 
 	/* Finish up. */
 	if (power_off_when_done)
@@ -237,14 +241,14 @@ parse_options (char **argv) {
 /* Runs the task specified in ARGV[1]. */
 static void
 run_task (char **argv) {
-	const char *task = argv[1];
+	const char *task = argv[1];	// task = "echo x"
 
 	printf ("Executing '%s':\n", task);
 #ifdef USERPROG
 	if (thread_tests){
 		run_test (task);
-	} else {
-		process_wait (process_create_initd (task));
+	} else {	// thread1이 아니면
+		process_wait (process_create_initd (task));	// 해당 함수 실행
 	}
 #else
 	run_test (task);
@@ -264,6 +268,7 @@ run_actions (char **argv) {
 	};
 
 	/* Table of supported actions. */
+	// 현재 actions에는 "run"밖에 없으므로 "run"과 동일한 argv가 들어와야 run_task() 함수가 실행
 	static const struct action actions[] = {
 		{"run", 2, run_task},
 #ifdef FILESYS
@@ -276,11 +281,13 @@ run_actions (char **argv) {
 		{NULL, 0, NULL},
 	};
 
+	// NULL을 만날 때까지 argv를 하나씩 실행
 	while (*argv != NULL) {
 		const struct action *a;
 		int i;
 
 		/* Find action name. */
+		// 인자로 받은 *argv와 원래 저장되어 있던 action이랑 매칭되는지 확인
 		for (a = actions; ; a++)
 			if (a->name == NULL)
 				PANIC ("unknown action `%s' (use -h for help)", *argv);
@@ -288,11 +295,13 @@ run_actions (char **argv) {
 				break;
 
 		/* Check for required arguments. */
+		// *argv 개수가 잘 있는지 확인
 		for (i = 1; i < a->argc; i++)
 			if (argv[i] == NULL)
 				PANIC ("action `%s' requires %d argument(s)", *argv, a->argc - 1);
 
 		/* Invoke action and advance. */
+		// 각 인자들에 맞는 실행 시작
 		a->function (argv);
 		argv += a->argc;
 	}
