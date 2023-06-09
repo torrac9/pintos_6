@@ -105,6 +105,8 @@ struct thread {
 	struct list_elem elem;              /* List element. */
 
 	int exit_status;
+	struct file **fdt[128];
+	int next_fd;
 
 
 #ifdef USERPROG

@@ -5,11 +5,13 @@
 #include "threads/thread.h"
 #include "threads/loader.h"
 #include "userprog/gdt.h"
+#include "userprog/process.h"
 #include "threads/flags.h"
 #include "intrinsic.h"
 #include "filesys/filesys.h"
-#include "threads/synch.h"
-#include "devices/input.h"
+#include "filesys/file.h"
+// #include "threads/synch.h"
+// #include "devices/input.h"
 #include "lib/kernel/stdio.h"
 #include "lib/stdio.h"
 
@@ -18,7 +20,11 @@ void syscall_handler (struct intr_frame *);
 void check_address(void *addr);
 void halt (void);
 void exit (int status);
-
+bool create(const char *file, unsigned initial_size);
+bool remove(const char *file);
+int open(const char *file_name);
+int filesize(int fd);
+void seek(int fd, unsigned position);
 
 
 /* System call.
@@ -60,8 +66,42 @@ syscall_handler (struct intr_frame *f UNUSED) {
 			exit(f->R.rdi);
 			break;
 		case SYS_WRITE:
-			write(f->R.rdi, f->R.rsi, f->R.rdx);
+			f->R.rax = write(f->R.rdi, f->R.rsi, f->R.rdx);
 			break;
+		// case SYS_FORK:
+		// 	f->R.rax = fork(f->R.rdi);
+		// 	break;
+		// case SYS_EXEC:
+		// 	f->R.rax = exec(f->R.rdi);
+		// 	break;
+		// case SYS_WAIT:
+		// 	wait(f->R.rdi);
+		// 	break;
+		case SYS_CREATE:
+			f->R.rax = create(f->R.rdi, f->R.rsi);
+			break;
+		case SYS_REMOVE:
+			f->R.rax = remove(f->R.rdi);
+			break;
+		case SYS_OPEN:
+			f->R.rax = open(f->R.rdi);
+			break;
+		case SYS_FILESIZE:
+			f->R.rax = open(f->R.rdi);
+			break;
+		// case SYS_READ:
+		// 	read(f->R.rdi, f->R.rsi, f->R.rdx);
+		// 	break;
+		case SYS_SEEK:
+			seek(f->R.rdi, f->R.rsi);
+			break;
+		// case SYS_TELL:
+		// 	tell(f->R.rdi);
+		// 	break;
+		// case SYS_CLOSE:
+		// 	close(f->R.rdi);
+		// 	break;
+		
 	}
 	// printf ("system call!\n");
 	// thread_exit ();
@@ -105,4 +145,49 @@ int write(int fd, const void *buffer, unsigned size)
 	}
 
 	return bytes_write;
+}
+
+
+bool create(const char *file, unsigned initial_size)
+{
+	check_address(file);
+	return filesys_create(file, initial_size);
+}
+
+bool remove(const char *file)
+{
+	check_address(file);
+	return filesys_remove(file);
+}
+
+int open(const char *file_name)
+{
+	check_address(file_name);
+	struct file *file = filesys_open(file_name);
+	if (file == NULL)
+		return -1;
+
+	int fd = process_add_file(file);
+	if (fd == -1)
+		file_close(file);
+
+	return fd;
+}
+
+int filesize(int fd)
+{
+	struct file *file = process_get_file(fd);
+	if (file == NULL)
+		return -1;
+	return file_length(file);
+}
+
+void seek(int fd, unsigned position)
+{
+	if (fd < 2)
+		return;
+	struct file *file = process_get_file(fd);
+	if (file == NULL)
+		return;
+	file_seek(file, position);
 }
