@@ -8,12 +8,18 @@
 #include "threads/flags.h"
 #include "intrinsic.h"
 #include "filesys/filesys.h"
+#include "threads/synch.h"
+#include "devices/input.h"
+#include "lib/kernel/stdio.h"
+#include "lib/stdio.h"
 
 void syscall_entry (void);
 void syscall_handler (struct intr_frame *);
 void check_address(void *addr);
 void halt (void);
 void exit (int status);
+
+
 
 /* System call.
  *
@@ -52,6 +58,10 @@ syscall_handler (struct intr_frame *f UNUSED) {
 			break;
 		case SYS_EXIT:
 			exit(f->R.rdi);
+			break;
+		case SYS_WRITE:
+			write(f->R.rdi, f->R.rsi, f->R.rdx);
+			break;
 	}
 	// printf ("system call!\n");
 	// thread_exit ();
@@ -83,4 +93,16 @@ void exit(int status)
 	curr->exit_status = status; // 이거 wait에서 사용?
 	printf("%s: exit(%d)\n", curr->name, status);
 	thread_exit();
+}
+int write(int fd, const void *buffer, unsigned size)
+{
+	check_address(buffer);
+	int bytes_write = 0;
+	if (fd == STDOUT_FILENO)
+	{
+		putbuf(buffer, size);
+		bytes_write = size;
+	}
+
+	return bytes_write;
 }

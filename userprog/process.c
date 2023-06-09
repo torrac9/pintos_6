@@ -238,7 +238,7 @@ int process_exec(void *f_name)
     _if.R.rdi = count;
     _if.R.rsi = (char *)_if.rsp + 8;
 
-    hex_dump(_if.rsp, _if.rsp, USER_STACK - (uint64_t)_if.rsp, true); // user stack을 16진수로 프린트
+    //hex_dump(_if.rsp, _if.rsp, USER_STACK - (uint64_t)_if.rsp, true); // user stack을 16진수로 프린트
     // ~ Argument Passing
 
     /* If load failed, quit. */
