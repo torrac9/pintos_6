@@ -10,10 +10,10 @@
 #include "intrinsic.h"
 #include "filesys/filesys.h"
 #include "filesys/file.h"
-// #include "threads/synch.h"
-// #include "devices/input.h"
+#include "threads/synch.h"
+#include "devices/input.h"
 #include "lib/kernel/stdio.h"
-#include "lib/stdio.h"
+#include "threads/palloc.h"
 
 void syscall_entry (void);
 void syscall_handler (struct intr_frame *);
@@ -25,7 +25,8 @@ bool remove(const char *file);
 int open(const char *file_name);
 int filesize(int fd);
 void seek(int fd, unsigned position);
-
+unsigned tell(int fd);
+void close(int fd);
 
 /* System call.
  *
@@ -87,20 +88,19 @@ syscall_handler (struct intr_frame *f UNUSED) {
 			f->R.rax = open(f->R.rdi);
 			break;
 		case SYS_FILESIZE:
-			f->R.rax = open(f->R.rdi);
+			f->R.rax = filesize(f->R.rdi);
 			break;
-		// case SYS_READ:
-		// 	read(f->R.rdi, f->R.rsi, f->R.rdx);
-		// 	break;
+		case SYS_READ:
+			f->R.rax = read(f->R.rdi, f->R.rsi, f->R.rdx);
+			break;
 		case SYS_SEEK:
 			seek(f->R.rdi, f->R.rsi);
 			break;
-		// case SYS_TELL:
-		// 	tell(f->R.rdi);
-		// 	break;
-		// case SYS_CLOSE:
-		// 	close(f->R.rdi);
-		// 	break;
+		case SYS_TELL:
+			f->R.rax = tell(f->R.rdi);
+			break;
+		case SYS_CLOSE:
+			close(f->R.rdi);
 		
 	}
 	// printf ("system call!\n");
@@ -125,6 +125,14 @@ void check_address(void *addr)
 	if (pml4_get_page(thread_current()->pml4, addr) == NULL)
 		exit(-1);
 }
+
+
+void halt(void)
+{
+	power_off();
+}
+
+
 
 
 void exit(int status)
@@ -184,10 +192,26 @@ int filesize(int fd)
 
 void seek(int fd, unsigned position)
 {
-	if (fd < 2)
-		return;
 	struct file *file = process_get_file(fd);
 	if (file == NULL)
 		return;
 	file_seek(file, position);
+}
+
+unsigned tell(int fd)
+{
+	struct file *file = process_get_file(fd);
+	if (file == NULL)
+		return;
+	return file_tell(file);
+}
+
+void close(int fd)
+{
+	struct file *file = process_get_file(fd);
+	if (file == NULL)
+		return;
+	file_close(file);
+	process_close_file(fd);
+}
 }
