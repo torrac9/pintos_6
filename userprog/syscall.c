@@ -20,6 +20,7 @@ void syscall_handler (struct intr_frame *);
 void check_address(void *addr);
 void halt (void);
 void exit (int status);
+int write(int fd, const void *buffer, unsigned size);
 bool create(const char *file, unsigned initial_size);
 bool remove(const char *file);
 int open(const char *file_name);
@@ -27,6 +28,10 @@ int filesize(int fd);
 void seek(int fd, unsigned position);
 unsigned tell(int fd);
 void close(int fd);
+int read(int fd, void *buffer, unsigned size);
+tid_t fork(const char *thread_name, struct intr_frame *f);
+int exec(const char *cmd_line);
+int wait(int pid);
 
 /* System call.
  *
@@ -52,6 +57,8 @@ syscall_init (void) {
 	 * mode stack. Therefore, we masked the FLAG_FL. */
 	write_msr(MSR_SYSCALL_MASK,
 			FLAG_IF | FLAG_TF | FLAG_DF | FLAG_IOPL | FLAG_AC | FLAG_NT);
+	
+	lock_init(&filesys_lock);
 }
 
 /* The main system call interface */
@@ -69,15 +76,15 @@ syscall_handler (struct intr_frame *f UNUSED) {
 		case SYS_WRITE:
 			f->R.rax = write(f->R.rdi, f->R.rsi, f->R.rdx);
 			break;
-		// case SYS_FORK:
-		// 	f->R.rax = fork(f->R.rdi);
-		// 	break;
-		// case SYS_EXEC:
-		// 	f->R.rax = exec(f->R.rdi);
-		// 	break;
-		// case SYS_WAIT:
-		// 	wait(f->R.rdi);
-		// 	break;
+		case SYS_FORK:
+			f->R.rax = fork(f->R.rdi, f);
+			break;
+		case SYS_EXEC:
+			f->R.rax = exec(f->R.rdi);
+			break;
+		case SYS_WAIT:
+			f->R.rax = wait(f->R.rdi);
+			break;
 		case SYS_CREATE:
 			f->R.rax = create(f->R.rdi, f->R.rsi);
 			break;
@@ -103,16 +110,8 @@ syscall_handler (struct intr_frame *f UNUSED) {
 			close(f->R.rdi);
 		
 	}
-	// printf ("system call!\n");
-	// thread_exit ();
+
 }
-
-
-void halt(void)
-{
-	power_off();
-}
-
 
 void check_address(void *addr)
 {
@@ -146,12 +145,28 @@ int write(int fd, const void *buffer, unsigned size)
 {
 	check_address(buffer);
 	int bytes_write = 0;
+	
 	if (fd == STDOUT_FILENO)
 	{
 		putbuf(buffer, size);
 		bytes_write = size;
 	}
-
+	else
+	{
+		if (fd < 2)
+			{	
+			return -1;
+			}
+		struct file *file = process_get_file(fd);
+		if (file == NULL)
+		{
+		
+			return -1;
+		}
+		lock_acquire(&filesys_lock);
+		bytes_write = file_write(file, buffer, size);
+		lock_release(&filesys_lock);
+	}
 	return bytes_write;
 }
 
@@ -214,4 +229,71 @@ void close(int fd)
 	file_close(file);
 	process_close_file(fd);
 }
+
+int read(int fd, void *buffer, unsigned size)
+{
+	check_address(buffer);
+
+	char *ptr = (char *)buffer;
+	int bytes_read = 0;
+
+	lock_acquire(&filesys_lock);
+	if (fd == STDIN_FILENO)
+	{
+		for (int i = 0; i < size; i++)
+		{
+			*ptr++ = input_getc();
+			bytes_read++;
+		}
+		lock_release(&filesys_lock);
+	}
+	else
+	{
+		if (fd < 2)
+			{
+				lock_release(&filesys_lock);
+				return -1;
+			}
+		struct file *file = process_get_file(fd);
+		if (file == NULL)
+		{
+			lock_release(&filesys_lock);
+			return -1;
+		}
+		bytes_read = file_read(file, buffer, size);
+		lock_release(&filesys_lock);
+	}
+	return bytes_read;
+}
+
+tid_t fork(const char *thread_name, struct intr_frame *f)
+{
+	return process_fork(thread_name, f);
+}
+
+int exec(const char *cmd_line)
+{
+	check_address(cmd_line);
+
+	// process.c 파일의 process_create_initd 함수와 유사하다.
+	// 단, 스레드를 새로 생성하는 건 fork에서 수행하므로
+	// 이 함수에서는 새 스레드를 생성하지 않고 process_exec을 호출한다.
+
+	// process_exec 함수 안에서 filename을 변경해야 하므로
+	// 커널 메모리 공간에 cmd_line의 복사본을 만든다.
+	// (현재는 const char* 형식이기 때문에 수정할 수 없다.)
+	char *cmd_line_copy;
+	cmd_line_copy = palloc_get_page(0);
+	if (cmd_line_copy == NULL)
+		exit(-1);							  // 메모리 할당 실패 시 status -1로 종료한다.
+	strlcpy(cmd_line_copy, cmd_line, PGSIZE); // cmd_line을 복사한다.
+
+	// 스레드의 이름을 변경하지 않고 바로 실행한다.
+	if (process_exec(cmd_line_copy) == -1)
+		exit(-1); // 실패 시 status -1로 종료한다.
+}
+
+int wait(int pid)
+{
+	return process_wait(pid);
 }
