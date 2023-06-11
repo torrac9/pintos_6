@@ -27,6 +27,19 @@ static bool load (const char *file_name, struct intr_frame *if_);
 static void initd (void *f_name);
 static void __do_fork (void *);
 
+struct thread *get_child_process(int pid){
+	/* child list에 접근하여 process descripter 검색 */
+	struct thread *cur = thread_current();
+	struct list *child_list = &cur->child_process_list;
+	for(struct list_elem *e = list_begin(child_list); e != list_end(child_list); e = list_next(e)){
+		struct thread *t = list_entry(e, struct thread, child_elem);
+
+		if(t->tid == pid)
+			return t;
+	}
+	return NULL;
+}
+
 /* General process initializer for initd and other process. */
 static void
 process_init (void) {
@@ -87,8 +100,31 @@ initd (void *f_name) {
 tid_t
 process_fork (const char *name, struct intr_frame *if_ UNUSED) {
 	/* Clone current thread to new thread.*/
-	return thread_create (name,
-			PRI_DEFAULT, __do_fork, thread_current ());
+	struct thread *cur = thread_current();
+	// 현재 thread의 parent_if에 if_ 저장
+	memcpy(&cur->parent_if, if_, sizeof(struct intr_frame));
+
+	tid_t tid = thread_create(name, PRI_DEFAULT, __do_fork, cur);
+	if(tid == TID_ERROR){
+		return TID_ERROR;
+	}
+
+	struct thread *child = get_child_process(tid);
+	sema_down(&child->fork_sema);	// child가 메모리에 load 될 때까지 대기(blocked)
+
+	// 자식이 로드되다가 오류로 exit한 경우
+    if (child->exit_status == TID_ERROR)
+    {
+        // 자식이 종료되었으므로 자식 리스트에서 제거한다.
+        // 이거 넣으면 간헐적으로 실패함 (syn-read)
+        // list_remove(&child->child_elem);
+        // 자식이 완전히 종료되고 스케줄링이 이어질 수 있도록 자식에게 signal을 보낸다.
+        // sema_up(&child->free_sema);
+        // 자식 프로세스의 pid가 아닌 TID_ERROR를 반환한다.
+        return TID_ERROR;
+    }
+
+	return tid;
 }
 
 #ifndef VM
@@ -103,22 +139,51 @@ duplicate_pte (uint64_t *pte, void *va, void *aux) {
 	bool writable;
 
 	/* 1. TODO: If the parent_page is kernel page, then return immediately. */
-
+	if(is_kernel_vaddr(va)){
+		// return false ends pml4_for_each. which is undesirable - just return true to pass this kernel va
+		return true;
+	}
 	/* 2. Resolve VA from the parent's page map level 4. */
 	parent_page = pml4_get_page (parent->pml4, va);
+	if(parent_page == NULL){
+		printf("[fork-duplicate] faild to fetch page for user vaddr 'va'\n");
+		return false;
+	}
 
+#ifdef DEBUG
+	// pte: address pointing to one page table entry
+	// *pte: page table entry = address of the physical frame
+	void &test = ptov(PTE_ADDR(*pte)) + pg_ofs(va);	// should be same as parent_page
+	uint64_t va_offset = pg_ofs(va);	// should be 0: va comes from PTE, so there must be no 12bit physical offset
+#endif
 	/* 3. TODO: Allocate new PAL_USER page for the child and set result to
 	 *    TODO: NEWPAGE. */
-
+	newpage = palloc_get_page(PAL_USER);
+	if(newpage == NULL){
+		printf("[fork-duplicate] failed to palloc new page\n");
+		return false;
+	}
 	/* 4. TODO: Duplicate parent's page to the new page and
 	 *    TODO: check whether parent's page is writable or not (set WRITABLE
 	 *    TODO: according to the result). */
-
+	memcpy(newpage, parent_page, PGSIZE);
+	writable = is_writable(pte);
 	/* 5. Add new page to child's page table at address VA with WRITABLE
 	 *    permission. */
 	if (!pml4_set_page (current->pml4, va, newpage, writable)) {
 		/* 6. TODO: if fail to insert page, do error handling. */
+		printf("Failed to map user virtual page to given physical frame\n");
+		return false;
 	}
+
+#ifdef DEBUG
+	// is 'va' correctly mapped to newpage?
+	if(pml4_get_page(current->pml4, va) != newpage)
+		printf("Not mapped!");
+	
+	printf("--Completed copy--\n");
+#endif
+
 	return true;
 }
 #endif
@@ -128,7 +193,7 @@ duplicate_pte (uint64_t *pte, void *va, void *aux) {
  *       That is, you are required to pass second argument of process_fork to
  *       this function. */
 static void
-__do_fork (void *aux) {
+__do_fork (void *aux) {			// 부모의 것을 자식에게 다 복사해서 메모리에 올림
 	struct intr_frame if_;
 	struct thread *parent = (struct thread *) aux;
 	struct thread *current = thread_current ();
@@ -136,8 +201,14 @@ __do_fork (void *aux) {
 	struct intr_frame *parent_if;
 	bool succ = true;
 
+	parent_if = &parent->parent_if;
+#ifdef DEBUG
+	printf("[Fork] Forking from %s to %s\n", parent->name, current->name);
+#endif
+
 	/* 1. Read the cpu context to local stack. */
 	memcpy (&if_, parent_if, sizeof (struct intr_frame));
+	if_.R.rax = 0;
 
 	/* 2. Duplicate PT */
 	current->pml4 = pml4_create();
@@ -160,50 +231,103 @@ __do_fork (void *aux) {
 	 * TODO:       from the fork() until this function successfully duplicates
 	 * TODO:       the resources of parent.*/
 
-	process_init ();
+	// process_init ();
+	// if(parent->fdIdx == FDCOUNT_LIMIT)
+	// 	goto error;
+	
+	for(int i = 0; i < FDCOUNT_LIMIT; i++){
+		struct file *file = parent->fdTable[i];
+		if(file == NULL)
+			continue;
+		if(file > 2)
+			file = file_duplicate(file);
+		current->fdTable[i] = file;
+		}
+	
+	current->fdIdx = parent->fdIdx;
+
+#ifdef DEBUG
+	printf("[do_fork] %s Ready to switch!\n", current->name);
+#endif
+
+	sema_up(&current->fork_sema);
 
 	/* Finally, switch to the newly created process. */
 	if (succ)
 		do_iret (&if_);
 error:
-	thread_exit ();
+	sema_up(&current->fork_sema);
+	exit(TID_ERROR);
 }
 
-void argument_stack(char **argv, int argc, struct intr_frame *_if){
-	// little endian
-	char *arg_address[128];
+void argument_stack(char **argv, int argc, void **rsp){
+	// // little endian
+	// char *arg_address[64];
 
-	// 1. Save argument strings
-	// 맨 처음 if_->rsp = 0x47480000(USER_STACK)
-	for(int i = argc - 1; i >= 0; i--){	// 가장 idx가 큰 argv부터 쌓는다
-		int argv_len = strlen(argv[i]);	// argv[1] = "onearg", argv_len = 6
-		_if->rsp -= (argv_len + 1);
-		memcpy(_if->rsp, argv[i], argv_len + 1);
-		arg_address[i] = _if->rsp;
-		// _if->rsp = 0x4747ffed(1195900909)
-		// argu_address = {0x4747ffed, 0x4747fff9}
+	// // 1. Save argument strings
+	// // 맨 처음 if_->rsp = 0x47480000(USER_STACK)
+	// for(int i = argc - 1; i >= 0; i--){	// 가장 idx가 큰 argv부터 쌓는다
+	// 	int argv_len = strlen(argv[i]);	// argv[1] = "onearg", argv_len = 6
+	// 	_if->rsp -= (argv_len + 1);
+	// 	memcpy(_if->rsp, argv[i], argv_len + 1);
+	// 	arg_address[i] = _if->rsp;
+	// 	// _if->rsp = 0x4747ffed(1195900909)
+	// 	// argu_address = {0x4747ffed, 0x4747fff9}
 
-		// 2. Word-align padding
-		while(_if->rsp % 8 != 0){
-			_if->rsp--;
-			*(uint8_t *)(_if->rsp) = 0;
+	// 	// 2. Word-align padding
+	// 	while(_if->rsp % 8 != 0){
+	// 		_if->rsp--;
+	// 		*(uint8_t *)(_if->rsp) = 0;
+	// 	}
+	// 	// _if->rsp = 0x4747ff38(1195900904)
+
+	// 	// 3. Pointers to the argument strings
+	// 	size_t PTR_SIZE = sizeof(char *);	// PTR_SIZE = 8
+	// 	for(int i = argc; i >= 0; i--){
+	// 		_if->rsp = _if->rsp - PTR_SIZE;
+	// 		if(i == argc)
+	// 			memset(_if->rsp, 0, PTR_SIZE);
+	// 		else
+	// 			memcpy(_if->rsp, &arg_address[i], PTR_SIZE);
+	// 	}
+
+	// 	// 4. Return address
+	// 	_if->rsp -= PTR_SIZE;
+	// 	memset(_if->rsp, 0, PTR_SIZE);
+	// }
+		// 프로그램 이름, 인자 문자열 push
+	for (int i = argc - 1; i > -1; i--)
+	{
+		for (int j = strlen(argv[i]); j > -1; j--)
+		{
+			(*rsp)--;					  // 스택 주소 감소
+			**(char **)rsp = argv[i][j]; // 주소에 문자 저장
 		}
-		// _if->rsp = 0x4747ff38(1195900904)
-
-		// 3. Pointers to the argument strings
-		size_t PTR_SIZE = sizeof(char *);	// PTR_SIZE = 8
-		for(int i = argc; i >= 0; i--){
-			_if->rsp = _if->rsp - PTR_SIZE;
-			if(i == argc)
-				memset(_if->rsp, 0, PTR_SIZE);
-			else
-				memcpy(_if->rsp, &arg_address[i], PTR_SIZE);
-		}
-
-		// 4. Return address
-		_if->rsp -= PTR_SIZE;
-		memset(_if->rsp, 0, PTR_SIZE);
+		argv[i] = *(char **)rsp; // argv[i]에 현재 rsp의 값 저장해둠(지금 저장한 인자가 시작하는 주소값)
 	}
+
+	// 정렬 패딩 push
+	int padding = (int)*rsp % 8;
+	for (int i = 0; i < padding; i++)
+	{
+		(*rsp)--;
+		**(uint8_t **)rsp = 0; // rsp 직전까지 값 채움
+	}
+
+	// 인자 문자열 종료를 나타내는 0 push
+	(*rsp) -= 8;
+	**(char ***)rsp = 0;
+
+	// 각 인자 문자열의 주소 push
+	for (int i = argc - 1; i > -1; i--)
+	{
+		(*rsp) -= 8; // 다음 주소로 이동
+		**(char ***)rsp = argv[i];
+	}
+
+	// return address push
+	(*rsp) -= 8;
+	**(void ***)rsp = 0;
 }
 
 /* Switch the current execution context to the f_name.
@@ -246,14 +370,14 @@ process_exec (void *f_name) {
 	}
 
 	/* command line에서 받은 인자들을 스택에 차곡차곡 쌓는다. */
-	argument_stack(argv, argc, &_if);
+	argument_stack(argv, argc, &_if.rsp);
 	_if.R.rdi = argc;
 	_if.R.rsi = _if.rsp + 8;
 	// 두 번째 인자 argv rsi에
 	// 그냥 argv를 넣으면 여기 커널 스택에서의 char *argv[128]의 주소가 나온다.
 	// 따라서 유저 스택에 쌓은 argv의 주소를 가져와야 하므로 _if.rsp+8이다.
 
-	hex_dump(_if.rsp, _if.rsp, USER_STACK - _if.rsp, true);
+	// hex_dump(_if.rsp, _if.rsp, USER_STACK - _if.rsp, true);
 
 	// 작업이 끝났으므로 동적할당 메모리 free
 	palloc_free_page(file_name);
@@ -288,10 +412,21 @@ process_wait (tid_t child_tid UNUSED) {
 	 * XXX:       to add infinite loop here before
 	 * XXX:       implementing the process_wait. */
 
-	for(int i = 0; i < 100000000; i++){
+	// for(int i = 0; i < 100000000; i++){
 
-	}
-	return -1;
+	// }
+	// return -1;
+	struct thread *child = get_child_process(child_tid);
+
+	if(child == NULL)
+		return -1;
+	
+	sema_down(&child->wait_sema);
+
+	int exit_status = child->exit_status;
+	list_remove(&child->child_elem);
+	sema_up(&child->free_sema);
+	return exit_status;
 }
 
 /* Exit the process. This function is called by thread_exit (). */
@@ -302,8 +437,18 @@ process_exit (void) {
 	 * TODO: Implement process termination message (see
 	 * TODO: project2/process_termination.html).
 	 * TODO: We recommend you to implement process resource cleanup here. */
+	for (int i = 2; i < FDCOUNT_LIMIT; i++)
+	{
+		if (curr->fdTable[i] != NULL)
+			close(i);
+	}
+	
+	palloc_free_multiple(curr->fdTable, FDT_PAGES);
+	file_close(curr->running);	// 실행중 종료 불가
+	process_cleanup ();			// pml4 날리기
 
-	process_cleanup ();
+	sema_up(&curr->wait_sema);	// 종료 signal을 기다리던 부모 thread에게 전송 -> sema_up에서 val을 올림
+	sema_down(&curr->free_sema);	// 부모의 exit_status가 정확히 전달되었는지 확인
 }
 
 /* Free the current process's resources. */
@@ -533,6 +678,8 @@ load (const char *file_name, struct intr_frame *if_) {
 				break;
 		}
 	}
+	t->running = file;
+	file_deny_write(file);
 
 	/* Set up stack. */
 	if (!setup_stack (if_))
@@ -543,12 +690,11 @@ load (const char *file_name, struct intr_frame *if_) {
 
 	/* TODO: Your code goes here.
 	 * TODO: Implement argument passing (see project2/argument_passing.html). */
-
 	success = true;
 
 done:
 	/* We arrive here whether the load is successful or not. */
-	file_close (file);
+	// file_close (file);
 	return success;
 }
 

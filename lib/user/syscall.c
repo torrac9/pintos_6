@@ -14,6 +14,7 @@ static __inline int64_t syscall (uint64_t num_, uint64_t a1_, uint64_t a2_,
 	register uint64_t *a5 asm ("r8") = (uint64_t *) a5_;
 	register uint64_t *a6 asm ("r9") = (uint64_t *) a6_;
 
+	// 3. 각각의 register에 차례대로 system call number부터 각 인자들을 저장한다.
 	__asm __volatile(
 			"mov %1, %%rax\n"
 			"mov %2, %%rdi\n"
@@ -22,7 +23,7 @@ static __inline int64_t syscall (uint64_t num_, uint64_t a1_, uint64_t a2_,
 			"mov %5, %%r10\n"
 			"mov %6, %%r8\n"
 			"mov %7, %%r9\n"
-			"syscall\n"
+			"syscall\n"	// 4. 저장 후 syscall instruction을 한다. 커널 모드로 전환
 			: "=a" (ret)
 			: "g" (num), "g" (a1), "g" (a2), "g" (a3), "g" (a4), "g" (a5), "g" (a6)
 			: "cc", "memory");
@@ -47,6 +48,7 @@ static __inline int64_t syscall (uint64_t num_, uint64_t a1_, uint64_t a2_,
 			((uint64_t) ARG1), \
 			0, 0, 0, 0))
 
+// 2. 형식에 맞게 변환한다.
 #define syscall3(NUMBER, ARG0, ARG1, ARG2) ( \
 		syscall(((uint64_t) NUMBER), \
 			((uint64_t) ARG0), \
@@ -120,6 +122,7 @@ read (int fd, void *buffer, unsigned size) {
 	return syscall3 (SYS_READ, fd, buffer, size);
 }
 
+// 1. 해당 system call을 찾는다.
 int
 write (int fd, const void *buffer, unsigned size) {
 	return syscall3 (SYS_WRITE, fd, buffer, size);

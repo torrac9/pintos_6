@@ -110,7 +110,7 @@ thread_init (void) {
 	};
 	lgdt (&gdt_ds);
 
-	/* Init the globla thread context */
+	/* Init the global thread context */
 	lock_init (&tid_lock);
 	list_init (&ready_list);
 	list_init (&destruction_req);
@@ -213,6 +213,21 @@ thread_create (const char *name, int priority,
 	t->tf.ss = SEL_KDSEG;
 	t->tf.cs = SEL_KCSEG;
 	t->tf.eflags = FLAG_IF;
+
+	/* file descripter */
+	t->fdTable = palloc_get_multiple(PAL_ZERO, FDT_PAGES);	// 해당 프로세스의 FDT 공간 할당
+	if(t->fdTable == NULL)	// 제대로 공간이 할당되지 않았다면 error
+		return TID_ERROR;
+	
+	t->fdIdx = 2;	// 0: stdin, 1: stdout이므로 새 파일이 open()하면 2부터 시작
+	t->fdTable[0] = 1;	// 해당 인덱스(식별자)를 사용하는 파일이 존재
+	t->fdTable[1] = 2;	// NULL을 만들지 않기 위함. 원래는 해당 파일을 가리키는 포인터가 들어간다.
+	// t->stdin_count = 1;	// 이 프로세스의 표준 입력 파일이 열려있는지를 확인하는 flag
+	// t->stdout_count = 1;	// 이 프로세스의 표준 출력 파일이 열려있는지 확인하는 flag
+
+	/* process descripter */
+	struct thread *cur = thread_current();
+	list_push_back(&cur->child_process_list, &t->child_elem);
 
 	/* Add to run queue. */
 	thread_unblock (t);
@@ -436,6 +451,14 @@ init_thread (struct thread *t, const char *name, int priority) {
 
 	t->init_priority = priority;
 	t->wait_on_lock = NULL;
+
+	/* process descripter */
+	list_init(&t->child_process_list);
+	sema_init(&t->wait_sema, 0);
+	sema_init(&t->fork_sema, 0);
+	sema_init(&t->free_sema, 0);
+	t->running = NULL;
+
 	list_init(&t->donations);
 }
 
@@ -666,17 +689,14 @@ int64_t get_next_tick_to_awake(void){
 
 void test_max_priority(void){
 	// 현재 실행중인 thread와 ready list의 가장 높은 우선순위를 가진 thread를 비교하여 scheduling
-	if(list_empty(&ready_list))
+	if (thread_current() == idle_thread)
 		return;
-	
-	//struct thread *max_priority = list_entry(list_front(&ready_list), struct thread, elem);
-
-	if(!intr_context() && cmp_priority(list_front(&ready_list), &thread_current()->elem, NULL)){
+	if (list_empty(&ready_list))
+		return;
+	struct thread *curr = thread_current();
+	struct thread *ready = list_entry(list_front(&ready_list), struct thread, elem);
+	if (curr->priority < ready->priority)
 		thread_yield();
-	}
-	// if(max_priority->priority > thread_current()->priority){
-	// 	thread_yield();
-	// }
 }
 
 bool cmp_priority(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED){

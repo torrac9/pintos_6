@@ -5,10 +5,13 @@
 #include <list.h>
 #include <stdint.h>
 #include "threads/interrupt.h"
+#include "synch.h"
 #ifdef VM
 #include "vm/vm.h"
 #endif
 
+#define FDT_PAGES 3
+#define FDCOUNT_LIMIT FDT_PAGES *(1<<9)
 
 /* States in a thread's life cycle. */
 enum thread_status {
@@ -121,6 +124,25 @@ struct thread {
 	/* Owned by thread.c. */
 	struct intr_frame tf;               /* Information for switching */
 	unsigned magic;                     /* Detects stack overflow. */
+
+	/* 프로세스 관련 */
+	int exit_status;	// 자식 프로세스가 정상적으로 종료되었는지
+
+	struct semaphore fork_sema;	// fork()구현 시
+	struct semaphore wait_sema;	// wait()구현 시
+	struct semaphore free_sema; // free()구현 시
+
+	struct intr_frame parent_if;
+	struct list child_process_list;
+	struct list_elem child_elem;
+
+	/* 파일 관련 */
+	struct file **fdTable;
+	int fdIdx;
+	struct file *running;
+
+	// int stdin_count;
+	// int stdout_count;
 };
 
 /* If false (default), use round-robin scheduler.
@@ -171,3 +193,7 @@ void refresh_priority(void);
 bool thread_compare_donate_priority(const struct list_elem *l, const struct list_elem *s, void *aux UNUSED);
 
 #endif /* threads/thread.h */
+
+int process_add_file(struct file *f);
+void process_close_file(int fd);
+struct thread *get_child_process(int pid);
